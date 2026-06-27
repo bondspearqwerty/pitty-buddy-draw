@@ -879,6 +879,137 @@ function SectionsPane({
   );
 }
 
+function SubformsPane({
+  items,
+  fields,
+  onChange,
+  onFieldsChange,
+}: {
+  items: Subform[];
+  fields: Field[];
+  onChange: (next: Subform[]) => void;
+  onFieldsChange: (next: Field[]) => void;
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const add = () => {
+    const s: Subform = { id: uid(), label: "Новая сабформа", description: "" };
+    onChange([...items, s]);
+    setOpenId(s.id);
+  };
+  const update = (id: string, patch: Partial<Subform>) =>
+    onChange(items.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  const remove = (id: string) => {
+    onChange(items.filter((s) => s.id !== id));
+    onFieldsChange(
+      fields.map((f) => (f.subformId === id ? { ...f, subformId: null } : f)),
+    );
+    if (openId === id) setOpenId(null);
+  };
+  const fieldCount = (sid: string) =>
+    fields.filter((f) => f.subformId === sid).length;
+
+  const active = items.find((s) => s.id === openId) ?? null;
+  const activeFields = active
+    ? fields.filter((f) => f.subformId === active.id)
+    : [];
+
+  return (
+    <div>
+      <PaneHeader title="Сабформы" onAdd={add} addLabel="Сабформа" />
+      {items.length === 0 ? (
+        <Empty>
+          Сабформы группируют поля внутри модуля — как отдельные подформы со
+          своими именами.
+        </Empty>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {items.map((s) => (
+            <CompactTile
+              key={s.id}
+              onClick={() => setOpenId(s.id)}
+              onRemove={() => remove(s.id)}
+            >
+              <div className="flex items-start gap-2">
+                <FileText className="size-3.5 text-primary mt-0.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium truncate">{s.label}</div>
+                  <div className="text-[11px] text-muted-foreground truncate">
+                    {fieldCount(s.id)} полей
+                  </div>
+                </div>
+              </div>
+            </CompactTile>
+          ))}
+        </div>
+      )}
+
+      <ItemDialog
+        open={!!active}
+        onOpenChange={(v) => !v && setOpenId(null)}
+        title="Сабформа"
+      >
+        {active && (
+          <>
+            <div>
+              <Label>Название</Label>
+              <input
+                value={active.label}
+                onChange={(e) => update(active.id, { label: e.target.value })}
+                className="mt-1 w-full h-9 px-3 rounded-md bg-surface-2 border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <Label>Описание</Label>
+              <textarea
+                value={active.description}
+                onChange={(e) =>
+                  update(active.id, { description: e.target.value })
+                }
+                rows={4}
+                className="mt-1 w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <Label>Поля в сабформе ({activeFields.length})</Label>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {activeFields.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">
+                    Привяжите поля к этой сабформе из вкладки «Поля».
+                  </span>
+                ) : (
+                  activeFields.map((f) => (
+                    <span
+                      key={f.id}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 border border-primary/30 text-xs"
+                    >
+                      <span
+                        className={
+                          "size-1.5 rounded-full " +
+                          checkStatusDot(f.checkStatus)
+                        }
+                      />
+                      {f.label}
+                    </span>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="flex justify-end pt-2 border-t border-border">
+              <button
+                onClick={() => remove(active.id)}
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm text-muted-foreground hover:text-destructive-foreground hover:bg-destructive/15 hover:border-destructive/50"
+              >
+                <Trash2 className="size-4" />
+                Удалить
+              </button>
+            </div>
+          </>
+        )}
+      </ItemDialog>
+    </div>
+  );
+}
+
 function FieldsPane({
   items,
   sections,
