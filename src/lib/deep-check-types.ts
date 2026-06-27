@@ -21,6 +21,14 @@ export interface Section {
   status: ModuleState;
 }
 
+export interface Subform {
+  id: string;
+  label: string;
+  description: string;
+}
+
+
+
 export interface FieldProcess {
   id: string;
   name: string;
@@ -31,6 +39,7 @@ export interface Field {
   label: string;
   description: string;
   sectionId: string | null;
+  subformId: string | null;
   processes: FieldProcess[];
   checkStatus: CheckStatus;
   checkTime: string;
@@ -52,6 +61,7 @@ export interface DeepCheckModule {
   understanding: UnderstandingLevel;
   questions: Question[];
   sections: Section[];
+  subforms: Subform[];
   fields: Field[];
   processes: Process[];
   createdAt: number;

@@ -37,7 +37,14 @@ export function useDeepCheckStore() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setModules(readJSON<DeepCheckModule[]>(STORAGE_KEY, []));
+    const raw = readJSON<DeepCheckModule[]>(STORAGE_KEY, []);
+    setModules(
+      raw.map((m) => ({
+        ...m,
+        subforms: m.subforms ?? [],
+        fields: (m.fields ?? []).map((f) => ({ ...f, subformId: f.subformId ?? null })),
+      })),
+    );
     setOpenTabs(readJSON<string[]>(OPEN_TABS_KEY, []));
     setActiveTab(readJSON<string | null>(ACTIVE_TAB_KEY, null));
     setHydrated(true);
@@ -62,6 +69,7 @@ export function useDeepCheckStore() {
       understanding: "Среднее",
       questions: [],
       sections: [],
+      subforms: [],
       fields: [],
       processes: [],
       createdAt: Date.now(),
