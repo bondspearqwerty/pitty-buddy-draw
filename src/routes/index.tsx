@@ -398,13 +398,13 @@ function ModuleEditor({
   onDelete: () => void;
 }) {
   const [section, setSection] = useState<
-    "overview" | "questions" | "sections" | "fields" | "processes"
-  >("overview");
+    "questions" | "sections" | "subforms" | "fields" | "processes"
+  >("questions");
 
   const navItems = [
-    { key: "overview", label: "Обзор", icon: FileText, count: null as number | null },
     { key: "questions", label: "Вопросы", icon: HelpCircle, count: m.questions.length },
     { key: "sections", label: "Секции", icon: ListTree, count: m.sections.length },
+    { key: "subforms", label: "Сабформы", icon: FileText, count: m.subforms.length },
     { key: "fields", label: "Поля", icon: Layers, count: m.fields.length },
     { key: "processes", label: "Процессы", icon: Workflow, count: m.processes.length },
   ] as const;
