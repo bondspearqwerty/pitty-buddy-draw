@@ -1033,20 +1033,6 @@ function FieldsPane({
                   })
                 }
               />
-              <SelectField
-                label="Статус проверки"
-                value={active.checkStatus}
-                options={CHECK_STATUSES}
-                onChange={(v) =>
-                  update(active.id, {
-                    checkStatus: v as Field["checkStatus"],
-                    checkTime:
-                      v === "Не Проверено"
-                        ? "--"
-                        : new Date().toLocaleString(),
-                  })
-                }
-              />
               <div>
                 <Label>Время проверки</Label>
                 <div className="mt-1 h-9 px-3 rounded-md bg-surface-2 border border-border text-sm grid items-center font-mono text-muted-foreground">
