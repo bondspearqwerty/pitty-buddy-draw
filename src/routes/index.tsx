@@ -1006,6 +1006,34 @@ function FieldsPane({
                 }}
               />
               <SelectField
+                label="Сабформа"
+                value={
+                  subformOptions.find((o) => o.id === (active.subformId ?? ""))
+                    ?.label ?? "— без сабформы —"
+                }
+                options={subformOptions.map((o) => o.label)}
+                onChange={(label) => {
+                  const opt = subformOptions.find((o) => o.label === label);
+                  update(active.id, {
+                    subformId: opt && opt.id ? opt.id : null,
+                  });
+                }}
+              />
+              <SelectField
+                label="Статус проверки"
+                value={active.checkStatus}
+                options={CHECK_STATUSES}
+                onChange={(v) =>
+                  update(active.id, {
+                    checkStatus: v as Field["checkStatus"],
+                    checkTime:
+                      v === "Не Проверено"
+                        ? "--"
+                        : new Date().toLocaleString(),
+                  })
+                }
+              />
+              <SelectField
                 label="Статус проверки"
                 value={active.checkStatus}
                 options={CHECK_STATUSES}
