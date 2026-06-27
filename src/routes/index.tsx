@@ -954,6 +954,7 @@ function FieldsPane({
                   <div className="text-sm font-medium truncate">{f.label}</div>
                   <div className="text-[11px] text-muted-foreground truncate">
                     {sectionName(f.sectionId)}
+                    {f.subformId && ` · ⌘ ${subformName(f.subformId)}`}
                     {f.processes.length > 0 && ` · ${f.processes.length} проц.`}
                   </div>
                 </div>
