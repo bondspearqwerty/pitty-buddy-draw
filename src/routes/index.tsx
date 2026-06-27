@@ -492,7 +492,6 @@ function ModuleEditor({
       </div>
 
       <div className="py-6">
-        {section === "overview" && <OverviewPane module={m} />}
         {section === "questions" && (
           <QuestionsPane
             items={m.questions}
@@ -505,10 +504,19 @@ function ModuleEditor({
             onChange={(sections) => onChange({ sections })}
           />
         )}
+        {section === "subforms" && (
+          <SubformsPane
+            items={m.subforms}
+            fields={m.fields}
+            onChange={(subforms) => onChange({ subforms })}
+            onFieldsChange={(fields) => onChange({ fields })}
+          />
+        )}
         {section === "fields" && (
           <FieldsPane
             items={m.fields}
             sections={m.sections}
+            subforms={m.subforms}
             onChange={(fields) => onChange({ fields })}
           />
         )}
