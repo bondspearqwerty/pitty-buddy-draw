@@ -886,6 +886,7 @@ function FieldsPane({
       label: "Новое поле",
       description: "",
       sectionId: sections[0]?.id ?? null,
+      subformId: null,
       processes: [],
       checkStatus: "Не Проверено",
       checkTime: "--",
