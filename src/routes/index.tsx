@@ -586,6 +586,71 @@ function Empty({ children }: { children: React.ReactNode }) {
   );
 }
 
+function checkStatusDot(s: string) {
+  switch (s) {
+    case "Проверено":
+      return "bg-[var(--color-accent-emerald)]";
+    case "Требует Внимания":
+      return "bg-[var(--color-accent-rose)]";
+    default:
+      return "bg-muted-foreground";
+  }
+}
+
+function CompactTile({
+  onClick,
+  onRemove,
+  children,
+}: {
+  onClick: () => void;
+  onRemove: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="group relative">
+      <button
+        onClick={onClick}
+        className="w-full text-left surface-card px-3 py-2 hover:border-primary/40 transition"
+      >
+        {children}
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        className="absolute top-1 right-1 size-6 grid place-items-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive-foreground hover:bg-destructive/20"
+        aria-label="Удалить"
+      >
+        <X className="size-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function ItemDialog({
+  open,
+  onOpenChange,
+  title,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="display text-xl">{title}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">{children}</div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function QuestionsPane({
   items,
   onChange,
@@ -593,11 +658,20 @@ function QuestionsPane({
   items: Question[];
   onChange: (next: Question[]) => void;
 }) {
-  const add = () =>
-    onChange([...items, { id: uid(), title: "Новый вопрос", topic: "" }]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const add = () => {
+    const q = { id: uid(), title: "Новый вопрос", topic: "" };
+    onChange([...items, q]);
+    setOpenId(q.id);
+  };
   const update = (id: string, patch: Partial<Question>) =>
     onChange(items.map((q) => (q.id === id ? { ...q, ...patch } : q)));
-  const remove = (id: string) => onChange(items.filter((q) => q.id !== id));
+  const remove = (id: string) => {
+    onChange(items.filter((q) => q.id !== id));
+    if (openId === id) setOpenId(null);
+  };
+
+  const active = items.find((q) => q.id === openId) ?? null;
 
   return (
     <div>
@@ -605,32 +679,68 @@ function QuestionsPane({
       {items.length === 0 ? (
         <Empty>Открытых вопросов нет. Зафиксируйте то, что пока неясно.</Empty>
       ) : (
-        <div className="space-y-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {items.map((q) => (
-            <div key={q.id} className="surface-card p-4">
-              <div className="flex items-start gap-3">
-                <HelpCircle className="size-4 text-primary mt-1.5" />
-                <div className="flex-1 space-y-2">
-                  <input
-                    value={q.title}
-                    onChange={(e) => update(q.id, { title: e.target.value })}
-                    placeholder="Заголовок вопроса"
-                    className="w-full bg-transparent text-base font-medium outline-none focus:bg-surface-2/40 rounded px-1 -mx-1"
-                  />
-                  <textarea
-                    value={q.topic}
-                    onChange={(e) => update(q.id, { topic: e.target.value })}
-                    placeholder="Тема: о чём собираем информацию"
-                    rows={2}
-                    className="w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
-                  />
+            <CompactTile
+              key={q.id}
+              onClick={() => setOpenId(q.id)}
+              onRemove={() => remove(q.id)}
+            >
+              <div className="flex items-start gap-2">
+                <HelpCircle className="size-3.5 text-primary mt-0.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium truncate">
+                    {q.title || "—"}
+                  </div>
+                  {q.topic && (
+                    <div className="text-[11px] text-muted-foreground truncate">
+                      {q.topic}
+                    </div>
+                  )}
                 </div>
-                <RemoveBtn onClick={() => remove(q.id)} />
               </div>
-            </div>
+            </CompactTile>
           ))}
         </div>
       )}
+
+      <ItemDialog
+        open={!!active}
+        onOpenChange={(v) => !v && setOpenId(null)}
+        title="Вопрос"
+      >
+        {active && (
+          <>
+            <div>
+              <Label>Заголовок</Label>
+              <input
+                value={active.title}
+                onChange={(e) => update(active.id, { title: e.target.value })}
+                className="mt-1 w-full h-9 px-3 rounded-md bg-surface-2 border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <Label>Тема</Label>
+              <textarea
+                value={active.topic}
+                onChange={(e) => update(active.id, { topic: e.target.value })}
+                placeholder="О чём собираем информацию"
+                rows={5}
+                className="mt-1 w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div className="flex justify-end pt-2 border-t border-border">
+              <button
+                onClick={() => remove(active.id)}
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm text-muted-foreground hover:text-destructive-foreground hover:bg-destructive/15 hover:border-destructive/50"
+              >
+                <Trash2 className="size-4" />
+                Удалить
+              </button>
+            </div>
+          </>
+        )}
+      </ItemDialog>
     </div>
   );
 }
@@ -642,20 +752,26 @@ function SectionsPane({
   items: Section[];
   onChange: (next: Section[]) => void;
 }) {
-  const add = () =>
-    onChange([
-      ...items,
-      {
-        id: uid(),
-        label: "Новая секция",
-        description: "",
-        understanding: "Среднее",
-        status: "В разработке",
-      },
-    ]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const add = () => {
+    const s: Section = {
+      id: uid(),
+      label: "Новая секция",
+      description: "",
+      understanding: "Среднее",
+      status: "В разработке",
+    };
+    onChange([...items, s]);
+    setOpenId(s.id);
+  };
   const update = (id: string, patch: Partial<Section>) =>
     onChange(items.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  const remove = (id: string) => onChange(items.filter((s) => s.id !== id));
+  const remove = (id: string) => {
+    onChange(items.filter((s) => s.id !== id));
+    if (openId === id) setOpenId(null);
+  };
+
+  const active = items.find((s) => s.id === openId) ?? null;
 
   return (
     <div>
@@ -663,53 +779,87 @@ function SectionsPane({
       {items.length === 0 ? (
         <Empty>Секции группируют поля по смыслу. Например, «Developer».</Empty>
       ) : (
-        <div className="space-y-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {items.map((s) => (
-            <div key={s.id} className="surface-card p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-1 space-y-3">
-                  <input
-                    value={s.label}
-                    onChange={(e) => update(s.id, { label: e.target.value })}
-                    className="w-full bg-transparent text-base font-medium outline-none focus:bg-surface-2/40 rounded px-1 -mx-1"
-                  />
-                  <textarea
-                    value={s.description}
-                    onChange={(e) =>
-                      update(s.id, { description: e.target.value })
-                    }
-                    placeholder="Описание секции"
-                    rows={2}
-                    className="w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
-                  />
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <SelectField
-                      label="Понимание секции"
-                      value={s.understanding}
-                      options={UNDERSTANDING_LEVELS}
-                      onChange={(v) =>
-                        update(s.id, {
-                          understanding: v as Section["understanding"],
-                        })
-                      }
-                    />
-                    <SelectField
-                      label="Статус"
-                      value={s.status}
-                      options={MODULE_STATES}
-                      onChange={(v) =>
-                        update(s.id, { status: v as Section["status"] })
-                      }
-                      dot={stateDot(s.status)}
-                    />
+            <CompactTile
+              key={s.id}
+              onClick={() => setOpenId(s.id)}
+              onRemove={() => remove(s.id)}
+            >
+              <div className="flex items-start gap-2">
+                <ListTree className="size-3.5 text-primary mt-0.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium truncate">{s.label}</div>
+                  <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                    <span className={"size-1.5 rounded-full " + stateDot(s.status)} />
+                    <span className="truncate">{s.status}</span>
                   </div>
                 </div>
-                <RemoveBtn onClick={() => remove(s.id)} />
               </div>
-            </div>
+            </CompactTile>
           ))}
         </div>
       )}
+
+      <ItemDialog
+        open={!!active}
+        onOpenChange={(v) => !v && setOpenId(null)}
+        title="Секция"
+      >
+        {active && (
+          <>
+            <div>
+              <Label>Название</Label>
+              <input
+                value={active.label}
+                onChange={(e) => update(active.id, { label: e.target.value })}
+                className="mt-1 w-full h-9 px-3 rounded-md bg-surface-2 border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <Label>Описание</Label>
+              <textarea
+                value={active.description}
+                onChange={(e) =>
+                  update(active.id, { description: e.target.value })
+                }
+                rows={4}
+                className="mt-1 w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <SelectField
+                label="Понимание секции"
+                value={active.understanding}
+                options={UNDERSTANDING_LEVELS}
+                onChange={(v) =>
+                  update(active.id, {
+                    understanding: v as Section["understanding"],
+                  })
+                }
+              />
+              <SelectField
+                label="Статус"
+                value={active.status}
+                options={MODULE_STATES}
+                onChange={(v) =>
+                  update(active.id, { status: v as Section["status"] })
+                }
+                dot={stateDot(active.status)}
+              />
+            </div>
+            <div className="flex justify-end pt-2 border-t border-border">
+              <button
+                onClick={() => remove(active.id)}
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm text-muted-foreground hover:text-destructive-foreground hover:bg-destructive/15 hover:border-destructive/50"
+              >
+                <Trash2 className="size-4" />
+                Удалить
+              </button>
+            </div>
+          </>
+        )}
+      </ItemDialog>
     </div>
   );
 }
@@ -723,27 +873,35 @@ function FieldsPane({
   sections: Section[];
   onChange: (next: Field[]) => void;
 }) {
-  const add = () =>
-    onChange([
-      ...items,
-      {
-        id: uid(),
-        label: "Новое поле",
-        description: "",
-        sectionId: sections[0]?.id ?? null,
-        processes: [],
-        checkStatus: "Не Проверено",
-        checkTime: "--",
-      },
-    ]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const add = () => {
+    const f: Field = {
+      id: uid(),
+      label: "Новое поле",
+      description: "",
+      sectionId: sections[0]?.id ?? null,
+      processes: [],
+      checkStatus: "Не Проверено",
+      checkTime: "--",
+    };
+    onChange([...items, f]);
+    setOpenId(f.id);
+  };
   const update = (id: string, patch: Partial<Field>) =>
     onChange(items.map((f) => (f.id === id ? { ...f, ...patch } : f)));
-  const remove = (id: string) => onChange(items.filter((f) => f.id !== id));
+  const remove = (id: string) => {
+    onChange(items.filter((f) => f.id !== id));
+    if (openId === id) setOpenId(null);
+  };
 
   const sectionOptions = [
     { id: "", label: "— без секции —" },
     ...sections.map((s) => ({ id: s.id, label: s.label })),
   ];
+  const sectionName = (id: string | null) =>
+    sections.find((s) => s.id === id)?.label ?? "— без секции —";
+
+  const active = items.find((f) => f.id === openId) ?? null;
 
   return (
     <div>
@@ -753,69 +911,112 @@ function FieldsPane({
           Поля — самая мелкая единица. Каждое поле можно отметить проверенным.
         </Empty>
       ) : (
-        <div className="space-y-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {items.map((f) => (
-            <div key={f.id} className="surface-card p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-1 space-y-3">
-                  <input
-                    value={f.label}
-                    onChange={(e) => update(f.id, { label: e.target.value })}
-                    className="w-full bg-transparent text-base font-medium outline-none focus:bg-surface-2/40 rounded px-1 -mx-1"
-                  />
-                  <textarea
-                    value={f.description}
-                    onChange={(e) =>
-                      update(f.id, { description: e.target.value })
-                    }
-                    placeholder="Описание поля"
-                    rows={2}
-                    className="w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
-                  />
-                  <div className="grid sm:grid-cols-3 gap-3">
-                    <SelectField
-                      label="Секция"
-                      value={f.sectionId ?? ""}
-                      options={sectionOptions.map((o) => o.label)}
-                      onChange={(label) => {
-                        const opt = sectionOptions.find((o) => o.label === label);
-                        update(f.id, {
-                          sectionId: opt && opt.id ? opt.id : null,
-                        });
-                      }}
-                    />
-                    <SelectField
-                      label="Статус проверки"
-                      value={f.checkStatus}
-                      options={CHECK_STATUSES}
-                      onChange={(v) =>
-                        update(f.id, {
-                          checkStatus: v as Field["checkStatus"],
-                          checkTime:
-                            v === "Не Проверено"
-                              ? "--"
-                              : new Date().toLocaleString(),
-                        })
-                      }
-                    />
-                    <div>
-                      <Label>Время проверки</Label>
-                      <div className="mt-1 h-9 px-3 rounded-md bg-surface-2 border border-border text-sm grid items-center font-mono text-muted-foreground">
-                        {f.checkTime}
-                      </div>
-                    </div>
+            <CompactTile
+              key={f.id}
+              onClick={() => setOpenId(f.id)}
+              onRemove={() => remove(f.id)}
+            >
+              <div className="flex items-start gap-2">
+                <span
+                  className={
+                    "mt-1.5 size-1.5 rounded-full shrink-0 " +
+                    checkStatusDot(f.checkStatus)
+                  }
+                  title={f.checkStatus}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium truncate">{f.label}</div>
+                  <div className="text-[11px] text-muted-foreground truncate">
+                    {sectionName(f.sectionId)}
+                    {f.processes.length > 0 && ` · ${f.processes.length} проц.`}
                   </div>
-                  <ProcessChips
-                    value={f.processes}
-                    onChange={(processes) => update(f.id, { processes })}
-                  />
                 </div>
-                <RemoveBtn onClick={() => remove(f.id)} />
               </div>
-            </div>
+            </CompactTile>
           ))}
         </div>
       )}
+
+      <ItemDialog
+        open={!!active}
+        onOpenChange={(v) => !v && setOpenId(null)}
+        title="Поле"
+      >
+        {active && (
+          <>
+            <div>
+              <Label>Лейбл</Label>
+              <input
+                value={active.label}
+                onChange={(e) => update(active.id, { label: e.target.value })}
+                className="mt-1 w-full h-9 px-3 rounded-md bg-surface-2 border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <Label>Описание</Label>
+              <textarea
+                value={active.description}
+                onChange={(e) =>
+                  update(active.id, { description: e.target.value })
+                }
+                rows={4}
+                className="mt-1 w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <SelectField
+                label="Секция"
+                value={
+                  sectionOptions.find((o) => o.id === (active.sectionId ?? ""))
+                    ?.label ?? "— без секции —"
+                }
+                options={sectionOptions.map((o) => o.label)}
+                onChange={(label) => {
+                  const opt = sectionOptions.find((o) => o.label === label);
+                  update(active.id, {
+                    sectionId: opt && opt.id ? opt.id : null,
+                  });
+                }}
+              />
+              <SelectField
+                label="Статус проверки"
+                value={active.checkStatus}
+                options={CHECK_STATUSES}
+                onChange={(v) =>
+                  update(active.id, {
+                    checkStatus: v as Field["checkStatus"],
+                    checkTime:
+                      v === "Не Проверено"
+                        ? "--"
+                        : new Date().toLocaleString(),
+                  })
+                }
+              />
+              <div>
+                <Label>Время проверки</Label>
+                <div className="mt-1 h-9 px-3 rounded-md bg-surface-2 border border-border text-sm grid items-center font-mono text-muted-foreground">
+                  {active.checkTime}
+                </div>
+              </div>
+            </div>
+            <ProcessChips
+              value={active.processes}
+              onChange={(processes) => update(active.id, { processes })}
+            />
+            <div className="flex justify-end pt-2 border-t border-border">
+              <button
+                onClick={() => remove(active.id)}
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm text-muted-foreground hover:text-destructive-foreground hover:bg-destructive/15 hover:border-destructive/50"
+              >
+                <Trash2 className="size-4" />
+                Удалить
+              </button>
+            </div>
+          </>
+        )}
+      </ItemDialog>
     </div>
   );
 }
@@ -872,20 +1073,26 @@ function ProcessesPane({
   items: Process[];
   onChange: (next: Process[]) => void;
 }) {
-  const add = () =>
-    onChange([
-      ...items,
-      {
-        id: uid(),
-        label: "Новый процесс",
-        description: "",
-        understanding: "Среднее",
-        status: "В разработке",
-      },
-    ]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const add = () => {
+    const p: Process = {
+      id: uid(),
+      label: "Новый процесс",
+      description: "",
+      understanding: "Среднее",
+      status: "В разработке",
+    };
+    onChange([...items, p]);
+    setOpenId(p.id);
+  };
   const update = (id: string, patch: Partial<Process>) =>
     onChange(items.map((p) => (p.id === id ? { ...p, ...patch } : p)));
-  const remove = (id: string) => onChange(items.filter((p) => p.id !== id));
+  const remove = (id: string) => {
+    onChange(items.filter((p) => p.id !== id));
+    if (openId === id) setOpenId(null);
+  };
+
+  const active = items.find((p) => p.id === openId) ?? null;
 
   return (
     <div>
@@ -896,54 +1103,88 @@ function ProcessesPane({
           цепочки.
         </Empty>
       ) : (
-        <div className="space-y-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {items.map((p) => (
-            <div key={p.id} className="surface-card p-4">
-              <div className="flex items-start gap-3">
-                <Workflow className="size-4 text-primary mt-1.5" />
-                <div className="flex-1 space-y-3">
-                  <input
-                    value={p.label}
-                    onChange={(e) => update(p.id, { label: e.target.value })}
-                    className="w-full bg-transparent text-base font-medium outline-none focus:bg-surface-2/40 rounded px-1 -mx-1"
-                  />
-                  <textarea
-                    value={p.description}
-                    onChange={(e) =>
-                      update(p.id, { description: e.target.value })
-                    }
-                    placeholder="Что делает процесс, что триггерит, что обновляет"
-                    rows={2}
-                    className="w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
-                  />
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <SelectField
-                      label="Понимание"
-                      value={p.understanding}
-                      options={UNDERSTANDING_LEVELS}
-                      onChange={(v) =>
-                        update(p.id, {
-                          understanding: v as Process["understanding"],
-                        })
-                      }
-                    />
-                    <SelectField
-                      label="Статус"
-                      value={p.status}
-                      options={MODULE_STATES}
-                      onChange={(v) =>
-                        update(p.id, { status: v as Process["status"] })
-                      }
-                      dot={stateDot(p.status)}
-                    />
+            <CompactTile
+              key={p.id}
+              onClick={() => setOpenId(p.id)}
+              onRemove={() => remove(p.id)}
+            >
+              <div className="flex items-start gap-2">
+                <Workflow className="size-3.5 text-primary mt-0.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium truncate">{p.label}</div>
+                  <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                    <span className={"size-1.5 rounded-full " + stateDot(p.status)} />
+                    <span className="truncate">{p.status}</span>
                   </div>
                 </div>
-                <RemoveBtn onClick={() => remove(p.id)} />
               </div>
-            </div>
+            </CompactTile>
           ))}
         </div>
       )}
+
+      <ItemDialog
+        open={!!active}
+        onOpenChange={(v) => !v && setOpenId(null)}
+        title="Процесс"
+      >
+        {active && (
+          <>
+            <div>
+              <Label>Название</Label>
+              <input
+                value={active.label}
+                onChange={(e) => update(active.id, { label: e.target.value })}
+                className="mt-1 w-full h-9 px-3 rounded-md bg-surface-2 border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <Label>Описание</Label>
+              <textarea
+                value={active.description}
+                onChange={(e) =>
+                  update(active.id, { description: e.target.value })
+                }
+                placeholder="Что делает процесс, что триггерит, что обновляет"
+                rows={5}
+                className="mt-1 w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <SelectField
+                label="Понимание"
+                value={active.understanding}
+                options={UNDERSTANDING_LEVELS}
+                onChange={(v) =>
+                  update(active.id, {
+                    understanding: v as Process["understanding"],
+                  })
+                }
+              />
+              <SelectField
+                label="Статус"
+                value={active.status}
+                options={MODULE_STATES}
+                onChange={(v) =>
+                  update(active.id, { status: v as Process["status"] })
+                }
+                dot={stateDot(active.status)}
+              />
+            </div>
+            <div className="flex justify-end pt-2 border-t border-border">
+              <button
+                onClick={() => remove(active.id)}
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm text-muted-foreground hover:text-destructive-foreground hover:bg-destructive/15 hover:border-destructive/50"
+              >
+                <Trash2 className="size-4" />
+                Удалить
+              </button>
+            </div>
+          </>
+        )}
+      </ItemDialog>
     </div>
   );
 }
