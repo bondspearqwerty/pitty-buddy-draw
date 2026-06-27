@@ -882,10 +882,12 @@ function SectionsPane({
 function FieldsPane({
   items,
   sections,
+  subforms,
   onChange,
 }: {
   items: Field[];
   sections: Section[];
+  subforms: Subform[];
   onChange: (next: Field[]) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
