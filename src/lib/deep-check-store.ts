@@ -62,6 +62,7 @@ export function useDeepCheckStore() {
       understanding: "Среднее",
       questions: [],
       sections: [],
+      subforms: [],
       fields: [],
       processes: [],
       createdAt: Date.now(),
