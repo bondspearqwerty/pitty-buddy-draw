@@ -918,6 +918,12 @@ function FieldsPane({
   ];
   const sectionName = (id: string | null) =>
     sections.find((s) => s.id === id)?.label ?? "— без секции —";
+  const subformOptions = [
+    { id: "", label: "— без сабформы —" },
+    ...subforms.map((s) => ({ id: s.id, label: s.label })),
+  ];
+  const subformName = (id: string | null) =>
+    subforms.find((s) => s.id === id)?.label ?? "— без сабформы —";
 
   const active = items.find((f) => f.id === openId) ?? null;
 
