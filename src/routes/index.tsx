@@ -14,6 +14,12 @@ import {
 } from "lucide-react";
 import { useDeepCheckStore, uid } from "@/lib/deep-check-store";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   CHECK_STATUSES,
   MODULE_STATES,
   UNDERSTANDING_LEVELS,
