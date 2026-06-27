@@ -21,6 +21,14 @@ export interface Section {
   status: ModuleState;
 }
 
+export interface Subform {
+  id: string;
+  label: string;
+  description: string;
+}
+
+
+
 export interface FieldProcess {
   id: string;
   name: string;
