@@ -530,42 +530,6 @@ function ModuleEditor({
   );
 }
 
-function OverviewPane({ module: m }: { module: DeepCheckModule }) {
-  const checked = m.fields.filter((f) => f.checkStatus === "Проверено").length;
-  const needs = m.fields.filter((f) => f.checkStatus === "Требует Внимания").length;
-  return (
-    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      <Stat label="Вопросов" value={m.questions.length} />
-      <Stat label="Секций" value={m.sections.length} />
-      <Stat
-        label="Полей"
-        value={m.fields.length}
-        hint={`${checked} проверено · ${needs} требует внимания`}
-      />
-      <Stat label="Процессов" value={m.processes.length} />
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: number;
-  hint?: string;
-}) {
-  return (
-    <div className="surface-card p-4">
-      <div className="text-xs text-muted-foreground uppercase tracking-wider">
-        {label}
-      </div>
-      <div className="display text-4xl mt-1">{value}</div>
-      {hint && <div className="text-[11px] text-muted-foreground mt-1">{hint}</div>}
-    </div>
-  );
-}
 
 /* ───────── Panes ───────── */
 
