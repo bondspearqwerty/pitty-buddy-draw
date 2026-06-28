@@ -25,6 +25,7 @@ import {
   UNDERSTANDING_LEVELS,
   type DeepCheckModule,
   type Field,
+  type ModelOrderItem,
   type Process,
   type Question,
   type Section,
