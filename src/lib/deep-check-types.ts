@@ -13,13 +13,20 @@ export interface Question {
   topic: string;
 }
 
+export interface SectionLayoutItem {
+  kind: "field" | "subform";
+  id: string;
+}
+
 export interface Section {
   id: string;
   label: string;
   description: string;
   understanding: UnderstandingLevel;
   status: ModuleState;
+  layout: SectionLayoutItem[];
 }
+
 
 export interface Subform {
   id: string;
