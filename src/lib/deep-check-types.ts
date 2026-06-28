@@ -14,7 +14,7 @@ export interface Question {
 }
 
 export interface SectionLayoutItem {
-  kind: "field" | "subform";
+  kind: "field";
   id: string;
 }
 
@@ -27,12 +27,19 @@ export interface Section {
   layout: SectionLayoutItem[];
 }
 
+export interface SubformLayoutItem {
+  kind: "field";
+  id: string;
+}
 
 export interface Subform {
   id: string;
   label: string;
   description: string;
+  layout: SubformLayoutItem[];
 }
+
+export type ModelOrderItem = { kind: "section" | "subform"; id: string };
 
 
 
