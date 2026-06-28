@@ -397,17 +397,21 @@ function ModuleEditor({
   onChange: (patch: Partial<DeepCheckModule>) => void;
   onDelete: () => void;
 }) {
-  const [section, setSection] = useState<
-    "questions" | "sections" | "subforms" | "fields" | "processes"
-  >("questions");
+  const [section, setSection] = useState<"questions" | "model" | "processes">(
+    "questions",
+  );
 
   const navItems = [
     { key: "questions", label: "Вопросы", icon: HelpCircle, count: m.questions.length },
-    { key: "sections", label: "Секции", icon: ListTree, count: m.sections.length },
-    { key: "subforms", label: "Сабформы", icon: FileText, count: m.subforms.length },
-    { key: "fields", label: "Поля", icon: Layers, count: m.fields.length },
+    {
+      key: "model",
+      label: "Модель",
+      icon: Layers,
+      count: m.sections.length + m.subforms.length + m.fields.length,
+    },
     { key: "processes", label: "Процессы", icon: Workflow, count: m.processes.length },
   ] as const;
+
 
   return (
     <div className="max-w-6xl mx-auto px-8 py-8">
