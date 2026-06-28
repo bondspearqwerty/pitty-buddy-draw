@@ -42,9 +42,11 @@ export function useDeepCheckStore() {
       raw.map((m) => ({
         ...m,
         subforms: m.subforms ?? [],
+        sections: (m.sections ?? []).map((s) => ({ ...s, layout: s.layout ?? [] })),
         fields: (m.fields ?? []).map((f) => ({ ...f, subformId: f.subformId ?? null })),
       })),
     );
+
     setOpenTabs(readJSON<string[]>(OPEN_TABS_KEY, []));
     setActiveTab(readJSON<string | null>(ACTIVE_TAB_KEY, null));
     setHydrated(true);
