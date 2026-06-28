@@ -76,6 +76,7 @@ export interface DeepCheckModule {
   questions: Question[];
   sections: Section[];
   subforms: Subform[];
+  modelOrder: ModelOrderItem[];
   fields: Field[];
   processes: Process[];
   createdAt: number;
