@@ -1413,14 +1413,3 @@ function SelectField({
   );
 }
 
-function RemoveBtn({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="size-8 grid place-items-center rounded-md text-muted-foreground hover:text-destructive-foreground hover:bg-destructive/15"
-      aria-label="Удалить"
-    >
-      <Trash2 className="size-4" />
-    </button>
-  );
-}
