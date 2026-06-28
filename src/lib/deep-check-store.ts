@@ -101,6 +101,7 @@ export function useDeepCheckStore() {
       questions: [],
       sections: [],
       subforms: [],
+      modelOrder: [],
       fields: [],
       processes: [],
       createdAt: Date.now(),
