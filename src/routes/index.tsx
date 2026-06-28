@@ -507,18 +507,13 @@ function ModuleEditor({
             sections={m.sections}
             subforms={m.subforms}
             fields={m.fields}
+            modelOrder={m.modelOrder}
             onSectionsChange={(sections) => onChange({ sections })}
             onSubformsChange={(subforms) => onChange({ subforms })}
             onFieldsChange={(fields) => onChange({ fields })}
+            onModelOrderChange={(modelOrder) => onChange({ modelOrder })}
           />
         )}
-        {section === "processes" && (
-          <ProcessesPane
-            items={m.processes}
-            onChange={(processes) => onChange({ processes })}
-          />
-        )}
-
         {section === "processes" && (
           <ProcessesPane
             items={m.processes}
