@@ -502,28 +502,23 @@ function ModuleEditor({
             onChange={(questions) => onChange({ questions })}
           />
         )}
-        {section === "sections" && (
-          <SectionsPane
-            items={m.sections}
-            onChange={(sections) => onChange({ sections })}
-          />
-        )}
-        {section === "subforms" && (
-          <SubformsPane
-            items={m.subforms}
+        {section === "model" && (
+          <ModelPane
+            sections={m.sections}
+            subforms={m.subforms}
             fields={m.fields}
-            onChange={(subforms) => onChange({ subforms })}
+            onSectionsChange={(sections) => onChange({ sections })}
+            onSubformsChange={(subforms) => onChange({ subforms })}
             onFieldsChange={(fields) => onChange({ fields })}
           />
         )}
-        {section === "fields" && (
-          <FieldsPane
-            items={m.fields}
-            sections={m.sections}
-            subforms={m.subforms}
-            onChange={(fields) => onChange({ fields })}
+        {section === "processes" && (
+          <ProcessesPane
+            items={m.processes}
+            onChange={(processes) => onChange({ processes })}
           />
         )}
+
         {section === "processes" && (
           <ProcessesPane
             items={m.processes}
