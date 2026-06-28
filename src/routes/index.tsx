@@ -397,17 +397,21 @@ function ModuleEditor({
   onChange: (patch: Partial<DeepCheckModule>) => void;
   onDelete: () => void;
 }) {
-  const [section, setSection] = useState<
-    "questions" | "sections" | "subforms" | "fields" | "processes"
-  >("questions");
+  const [section, setSection] = useState<"questions" | "model" | "processes">(
+    "questions",
+  );
 
   const navItems = [
     { key: "questions", label: "Вопросы", icon: HelpCircle, count: m.questions.length },
-    { key: "sections", label: "Секции", icon: ListTree, count: m.sections.length },
-    { key: "subforms", label: "Сабформы", icon: FileText, count: m.subforms.length },
-    { key: "fields", label: "Поля", icon: Layers, count: m.fields.length },
+    {
+      key: "model",
+      label: "Модель",
+      icon: Layers,
+      count: m.sections.length + m.subforms.length + m.fields.length,
+    },
     { key: "processes", label: "Процессы", icon: Workflow, count: m.processes.length },
   ] as const;
+
 
   return (
     <div className="max-w-6xl mx-auto px-8 py-8">
@@ -498,28 +502,23 @@ function ModuleEditor({
             onChange={(questions) => onChange({ questions })}
           />
         )}
-        {section === "sections" && (
-          <SectionsPane
-            items={m.sections}
-            onChange={(sections) => onChange({ sections })}
-          />
-        )}
-        {section === "subforms" && (
-          <SubformsPane
-            items={m.subforms}
+        {section === "model" && (
+          <ModelPane
+            sections={m.sections}
+            subforms={m.subforms}
             fields={m.fields}
-            onChange={(subforms) => onChange({ subforms })}
+            onSectionsChange={(sections) => onChange({ sections })}
+            onSubformsChange={(subforms) => onChange({ subforms })}
             onFieldsChange={(fields) => onChange({ fields })}
           />
         )}
-        {section === "fields" && (
-          <FieldsPane
-            items={m.fields}
-            sections={m.sections}
-            subforms={m.subforms}
-            onChange={(fields) => onChange({ fields })}
+        {section === "processes" && (
+          <ProcessesPane
+            items={m.processes}
+            onChange={(processes) => onChange({ processes })}
           />
         )}
+
         {section === "processes" && (
           <ProcessesPane
             items={m.processes}
@@ -531,42 +530,6 @@ function ModuleEditor({
   );
 }
 
-function OverviewPane({ module: m }: { module: DeepCheckModule }) {
-  const checked = m.fields.filter((f) => f.checkStatus === "Проверено").length;
-  const needs = m.fields.filter((f) => f.checkStatus === "Требует Внимания").length;
-  return (
-    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      <Stat label="Вопросов" value={m.questions.length} />
-      <Stat label="Секций" value={m.sections.length} />
-      <Stat
-        label="Полей"
-        value={m.fields.length}
-        hint={`${checked} проверено · ${needs} требует внимания`}
-      />
-      <Stat label="Процессов" value={m.processes.length} />
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: number;
-  hint?: string;
-}) {
-  return (
-    <div className="surface-card p-4">
-      <div className="text-xs text-muted-foreground uppercase tracking-wider">
-        {label}
-      </div>
-      <div className="display text-4xl mt-1">{value}</div>
-      {hint && <div className="text-[11px] text-muted-foreground mt-1">{hint}</div>}
-    </div>
-  );
-}
 
 /* ───────── Panes ───────── */
 
@@ -760,436 +723,673 @@ function QuestionsPane({
   );
 }
 
-function SectionsPane({
-  items,
-  onChange,
+function ModelPane({
+  sections,
+  subforms,
+  fields,
+  onSectionsChange,
+  onSubformsChange,
+  onFieldsChange,
 }: {
-  items: Section[];
-  onChange: (next: Section[]) => void;
+  sections: Section[];
+  subforms: Subform[];
+  fields: Field[];
+  onSectionsChange: (n: Section[]) => void;
+  onSubformsChange: (n: Subform[]) => void;
+  onFieldsChange: (n: Field[]) => void;
 }) {
+  const [openKind, setOpenKind] = useState<
+    null | "section" | "subform" | "field"
+  >(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  const add = () => {
+  const [dragOverSectionId, setDragOverSectionId] = useState<string | null>(null);
+  const [canvasHover, setCanvasHover] = useState(false);
+
+  const DRAG_MIME = "application/x-deepcheck";
+  const openItem = (kind: "section" | "subform" | "field", id: string) => {
+    setOpenKind(kind);
+    setOpenId(id);
+  };
+  const close = () => {
+    setOpenKind(null);
+    setOpenId(null);
+  };
+
+  const addSection = () => {
     const s: Section = {
       id: uid(),
       label: "Новая секция",
       description: "",
       understanding: "Среднее",
       status: "В разработке",
+      layout: [],
     };
-    onChange([...items, s]);
-    setOpenId(s.id);
+    onSectionsChange([...sections, s]);
   };
-  const update = (id: string, patch: Partial<Section>) =>
-    onChange(items.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  const remove = (id: string) => {
-    onChange(items.filter((s) => s.id !== id));
-    if (openId === id) setOpenId(null);
-  };
-
-  const active = items.find((s) => s.id === openId) ?? null;
-
-  return (
-    <div>
-      <PaneHeader title="Секции" onAdd={add} addLabel="Секция" />
-      {items.length === 0 ? (
-        <Empty>Секции группируют поля по смыслу. Например, «Developer».</Empty>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {items.map((s) => (
-            <CompactTile
-              key={s.id}
-              onClick={() => setOpenId(s.id)}
-              onRemove={() => remove(s.id)}
-            >
-              <div className="flex items-start gap-2">
-                <ListTree className="size-3.5 text-primary mt-0.5 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium truncate">{s.label}</div>
-                  <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                    <span className={"size-1.5 rounded-full " + stateDot(s.status)} />
-                    <span className="truncate">{s.status}</span>
-                  </div>
-                </div>
-              </div>
-            </CompactTile>
-          ))}
-        </div>
-      )}
-
-      <ItemDialog
-        open={!!active}
-        onOpenChange={(v) => !v && setOpenId(null)}
-        title="Секция"
-      >
-        {active && (
-          <>
-            <div>
-              <Label>Название</Label>
-              <input
-                value={active.label}
-                onChange={(e) => update(active.id, { label: e.target.value })}
-                className="mt-1 w-full h-9 px-3 rounded-md bg-surface-2 border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </div>
-            <div>
-              <Label>Описание</Label>
-              <textarea
-                value={active.description}
-                onChange={(e) =>
-                  update(active.id, { description: e.target.value })
-                }
-                rows={4}
-                className="mt-1 w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </div>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <SelectField
-                label="Понимание секции"
-                value={active.understanding}
-                options={UNDERSTANDING_LEVELS}
-                onChange={(v) =>
-                  update(active.id, {
-                    understanding: v as Section["understanding"],
-                  })
-                }
-              />
-              <SelectField
-                label="Статус"
-                value={active.status}
-                options={MODULE_STATES}
-                onChange={(v) =>
-                  update(active.id, { status: v as Section["status"] })
-                }
-                dot={stateDot(active.status)}
-              />
-            </div>
-            <div className="flex justify-end pt-2 border-t border-border">
-              <button
-                onClick={() => remove(active.id)}
-                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm text-muted-foreground hover:text-destructive-foreground hover:bg-destructive/15 hover:border-destructive/50"
-              >
-                <Trash2 className="size-4" />
-                Удалить
-              </button>
-            </div>
-          </>
-        )}
-      </ItemDialog>
-    </div>
-  );
-}
-
-function SubformsPane({
-  items,
-  fields,
-  onChange,
-  onFieldsChange,
-}: {
-  items: Subform[];
-  fields: Field[];
-  onChange: (next: Subform[]) => void;
-  onFieldsChange: (next: Field[]) => void;
-}) {
-  const [openId, setOpenId] = useState<string | null>(null);
-  const add = () => {
-    const s: Subform = { id: uid(), label: "Новая сабформа", description: "" };
-    onChange([...items, s]);
-    setOpenId(s.id);
-  };
-  const update = (id: string, patch: Partial<Subform>) =>
-    onChange(items.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  const remove = (id: string) => {
-    onChange(items.filter((s) => s.id !== id));
-    onFieldsChange(
-      fields.map((f) => (f.subformId === id ? { ...f, subformId: null } : f)),
-    );
-    if (openId === id) setOpenId(null);
-  };
-  const fieldCount = (sid: string) =>
-    fields.filter((f) => f.subformId === sid).length;
-
-  const active = items.find((s) => s.id === openId) ?? null;
-  const activeFields = active
-    ? fields.filter((f) => f.subformId === active.id)
-    : [];
-
-  return (
-    <div>
-      <PaneHeader title="Сабформы" onAdd={add} addLabel="Сабформа" />
-      {items.length === 0 ? (
-        <Empty>
-          Сабформы группируют поля внутри модуля — как отдельные подформы со
-          своими именами.
-        </Empty>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {items.map((s) => (
-            <CompactTile
-              key={s.id}
-              onClick={() => setOpenId(s.id)}
-              onRemove={() => remove(s.id)}
-            >
-              <div className="flex items-start gap-2">
-                <FileText className="size-3.5 text-primary mt-0.5 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium truncate">{s.label}</div>
-                  <div className="text-[11px] text-muted-foreground truncate">
-                    {fieldCount(s.id)} полей
-                  </div>
-                </div>
-              </div>
-            </CompactTile>
-          ))}
-        </div>
-      )}
-
-      <ItemDialog
-        open={!!active}
-        onOpenChange={(v) => !v && setOpenId(null)}
-        title="Сабформа"
-      >
-        {active && (
-          <>
-            <div>
-              <Label>Название</Label>
-              <input
-                value={active.label}
-                onChange={(e) => update(active.id, { label: e.target.value })}
-                className="mt-1 w-full h-9 px-3 rounded-md bg-surface-2 border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </div>
-            <div>
-              <Label>Описание</Label>
-              <textarea
-                value={active.description}
-                onChange={(e) =>
-                  update(active.id, { description: e.target.value })
-                }
-                rows={4}
-                className="mt-1 w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </div>
-            <div>
-              <Label>Поля в сабформе ({activeFields.length})</Label>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {activeFields.length === 0 ? (
-                  <span className="text-xs text-muted-foreground">
-                    Привяжите поля к этой сабформе из вкладки «Поля».
-                  </span>
-                ) : (
-                  activeFields.map((f) => (
-                    <span
-                      key={f.id}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 border border-primary/30 text-xs"
-                    >
-                      <span
-                        className={
-                          "size-1.5 rounded-full " +
-                          checkStatusDot(f.checkStatus)
-                        }
-                      />
-                      {f.label}
-                    </span>
-                  ))
-                )}
-              </div>
-            </div>
-            <div className="flex justify-end pt-2 border-t border-border">
-              <button
-                onClick={() => remove(active.id)}
-                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm text-muted-foreground hover:text-destructive-foreground hover:bg-destructive/15 hover:border-destructive/50"
-              >
-                <Trash2 className="size-4" />
-                Удалить
-              </button>
-            </div>
-          </>
-        )}
-      </ItemDialog>
-    </div>
-  );
-}
-
-function FieldsPane({
-  items,
-  sections,
-  subforms,
-  onChange,
-}: {
-  items: Field[];
-  sections: Section[];
-  subforms: Subform[];
-  onChange: (next: Field[]) => void;
-}) {
-  const [openId, setOpenId] = useState<string | null>(null);
-  const add = () => {
+  const addFieldTo = (sectionId: string) => {
     const f: Field = {
       id: uid(),
       label: "Новое поле",
       description: "",
-      sectionId: sections[0]?.id ?? null,
+      sectionId,
       subformId: null,
       processes: [],
       checkStatus: "Не Проверено",
       checkTime: "--",
     };
-    onChange([...items, f]);
-    setOpenId(f.id);
+    onFieldsChange([...fields, f]);
+    onSectionsChange(
+      sections.map((s) =>
+        s.id === sectionId
+          ? { ...s, layout: [...s.layout, { kind: "field", id: f.id }] }
+          : s,
+      ),
+    );
   };
-  const update = (id: string, patch: Partial<Field>) =>
-    onChange(items.map((f) => (f.id === id ? { ...f, ...patch } : f)));
-  const remove = (id: string) => {
-    onChange(items.filter((f) => f.id !== id));
-    if (openId === id) setOpenId(null);
+  const addSubformTo = (sectionId: string) => {
+    const sf: Subform = {
+      id: uid(),
+      label: "Новая сабформа",
+      description: "",
+    };
+    onSubformsChange([...subforms, sf]);
+    onSectionsChange(
+      sections.map((s) =>
+        s.id === sectionId
+          ? { ...s, layout: [...s.layout, { kind: "subform", id: sf.id }] }
+          : s,
+      ),
+    );
   };
 
-  const sectionOptions = [
-    { id: "", label: "— без секции —" },
-    ...sections.map((s) => ({ id: s.id, label: s.label })),
-  ];
-  const sectionName = (id: string | null) =>
-    sections.find((s) => s.id === id)?.label ?? "— без секции —";
-  const subformOptions = [
-    { id: "", label: "— без сабформы —" },
-    ...subforms.map((s) => ({ id: s.id, label: s.label })),
-  ];
-  const subformName = (id: string | null) =>
-    subforms.find((s) => s.id === id)?.label ?? "— без сабформы —";
+  const updateSection = (id: string, patch: Partial<Section>) =>
+    onSectionsChange(
+      sections.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    );
+  const updateField = (id: string, patch: Partial<Field>) =>
+    onFieldsChange(fields.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+  const updateSubform = (id: string, patch: Partial<Subform>) =>
+    onSubformsChange(
+      subforms.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    );
 
-  const active = items.find((f) => f.id === openId) ?? null;
+  const removeSection = (id: string) => {
+    const sec = sections.find((s) => s.id === id);
+    if (!sec) return;
+    const fieldIds = sec.layout.filter((i) => i.kind === "field").map((i) => i.id);
+    const subformIds = sec.layout
+      .filter((i) => i.kind === "subform")
+      .map((i) => i.id);
+    onFieldsChange(fields.filter((f) => !fieldIds.includes(f.id)));
+    onSubformsChange(subforms.filter((s) => !subformIds.includes(s.id)));
+    onSectionsChange(sections.filter((s) => s.id !== id));
+  };
+  const removeField = (id: string) => {
+    onFieldsChange(fields.filter((f) => f.id !== id));
+    onSectionsChange(
+      sections.map((s) => ({
+        ...s,
+        layout: s.layout.filter((i) => !(i.kind === "field" && i.id === id)),
+      })),
+    );
+  };
+  const removeSubform = (id: string) => {
+    onSubformsChange(subforms.filter((s) => s.id !== id));
+    onSectionsChange(
+      sections.map((s) => ({
+        ...s,
+        layout: s.layout.filter((i) => !(i.kind === "subform" && i.id === id)),
+      })),
+    );
+  };
+
+  const toRows = (layout: Section["layout"]) => {
+    const rows: Section["layout"][] = [];
+    let buf: Section["layout"] = [];
+    for (const item of layout) {
+      if (item.kind === "subform") {
+        if (buf.length) {
+          rows.push(buf);
+          buf = [];
+        }
+        rows.push([item]);
+      } else {
+        buf.push(item);
+        if (buf.length === 2) {
+          rows.push(buf);
+          buf = [];
+        }
+      }
+    }
+    if (buf.length) rows.push(buf);
+    return rows;
+  };
+
+  const dragStart = (kind: "section" | "subform" | "field") =>
+    (e: React.DragEvent) => {
+      e.dataTransfer.setData(DRAG_MIME, kind);
+      e.dataTransfer.setData("text/plain", kind);
+      e.dataTransfer.effectAllowed = "copy";
+    };
+
+  const dragKind = (e: React.DragEvent): string | null => {
+    if (e.dataTransfer.types.includes(DRAG_MIME)) {
+      return e.dataTransfer.getData(DRAG_MIME) || null;
+    }
+    return null;
+  };
 
   return (
-    <div>
-      <PaneHeader title="Поля" onAdd={add} addLabel="Поле" />
-      {items.length === 0 ? (
-        <Empty>
-          Поля — самая мелкая единица. Каждое поле можно отметить проверенным.
-        </Empty>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {items.map((f) => (
-            <CompactTile
-              key={f.id}
-              onClick={() => setOpenId(f.id)}
-              onRemove={() => remove(f.id)}
-            >
-              <div className="flex items-start gap-2">
-                <span
-                  className={
-                    "mt-1.5 size-1.5 rounded-full shrink-0 " +
-                    checkStatusDot(f.checkStatus)
-                  }
-                  title={f.checkStatus}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium truncate">{f.label}</div>
-                  <div className="text-[11px] text-muted-foreground truncate">
-                    {sectionName(f.sectionId)}
-                    {f.subformId && ` · ⌘ ${subformName(f.subformId)}`}
-                    {f.processes.length > 0 && ` · ${f.processes.length} проц.`}
-                  </div>
-                </div>
-              </div>
-            </CompactTile>
-          ))}
+    <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6">
+      {/* Palette */}
+      <aside className="space-y-2 md:sticky md:top-4 self-start">
+        <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
+          Палитра
         </div>
-      )}
+        <PaletteItem
+          icon={ListTree}
+          label="Секция"
+          hint="перетащите на канвас"
+          onDragStart={dragStart("section")}
+        />
+        <PaletteItem
+          icon={FileText}
+          label="Сабформа"
+          hint="перетащите в секцию"
+          onDragStart={dragStart("subform")}
+        />
+        <PaletteItem
+          icon={Layers}
+          label="Поле"
+          hint="перетащите в секцию"
+          onDragStart={dragStart("field")}
+        />
+      </aside>
+
+      {/* Canvas */}
+      <div
+        className={
+          "space-y-3 rounded-lg p-2 -m-2 transition " +
+          (canvasHover ? "bg-primary/5 ring-1 ring-primary/30" : "")
+        }
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes(DRAG_MIME)) {
+            e.preventDefault();
+            setCanvasHover(true);
+          }
+        }}
+        onDragLeave={() => setCanvasHover(false)}
+        onDrop={(e) => {
+          setCanvasHover(false);
+          if (e.dataTransfer.getData(DRAG_MIME) === "section") {
+            e.preventDefault();
+            addSection();
+          }
+        }}
+      >
+        {sections.length === 0 && (
+          <DropZone label="Перетащите «Секция» сюда, чтобы начать модель" />
+        )}
+
+        {sections.map((sec) => {
+          const rows = toRows(sec.layout);
+          const isOver = dragOverSectionId === sec.id;
+          return (
+            <div
+              key={sec.id}
+              className={
+                "surface-card p-4 transition " +
+                (isOver ? "ring-2 ring-primary/50" : "")
+              }
+              onDragOver={(e) => {
+                const k = dragKind(e);
+                if (k === "field" || k === "subform") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragOverSectionId(sec.id);
+                }
+              }}
+              onDragLeave={() =>
+                setDragOverSectionId((cur) => (cur === sec.id ? null : cur))
+              }
+              onDrop={(e) => {
+                const k = e.dataTransfer.getData(DRAG_MIME);
+                if (k === "field") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  addFieldTo(sec.id);
+                } else if (k === "subform") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  addSubformTo(sec.id);
+                }
+                setDragOverSectionId(null);
+              }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <span
+                  className={"size-1.5 rounded-full " + stateDot(sec.status)}
+                />
+                <button
+                  onClick={() => openItem("section", sec.id)}
+                  className="font-medium text-sm hover:text-primary"
+                >
+                  {sec.label}
+                </button>
+                <span className="text-[11px] text-muted-foreground">
+                  {sec.status}
+                </span>
+                <div className="ml-auto" />
+                <button
+                  onClick={() => {
+                    if (window.confirm(`Удалить секцию «${sec.label}»?`))
+                      removeSection(sec.id);
+                  }}
+                  className="size-7 grid place-items-center rounded text-muted-foreground hover:text-destructive-foreground hover:bg-destructive/20"
+                  aria-label="Удалить секцию"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+
+              {rows.length === 0 ? (
+                <DropZone
+                  small
+                  label="Перетащите сюда «Поле» или «Сабформа»"
+                />
+              ) : (
+                <div className="space-y-2">
+                  {rows.map((row, ri) => (
+                    <div
+                      key={ri}
+                      className={
+                        "grid gap-2 " +
+                        (row[0].kind === "subform"
+                          ? "grid-cols-1"
+                          : "grid-cols-2")
+                      }
+                    >
+                      {row.map((item) => {
+                        if (item.kind === "field") {
+                          const f = fields.find((x) => x.id === item.id);
+                          if (!f) return null;
+                          return (
+                            <FieldChip
+                              key={item.id}
+                              field={f}
+                              onOpen={() => openItem("field", item.id)}
+                              onRemove={() => removeField(item.id)}
+                            />
+                          );
+                        }
+                        const sf = subforms.find((x) => x.id === item.id);
+                        if (!sf) return null;
+                        return (
+                          <SubformChip
+                            key={item.id}
+                            subform={sf}
+                            count={
+                              fields.filter((f) => f.subformId === item.id)
+                                .length
+                            }
+                            onOpen={() => openItem("subform", item.id)}
+                            onRemove={() => removeSubform(item.id)}
+                          />
+                        );
+                      })}
+                      {row.length === 1 && row[0].kind === "field" && (
+                        <div className="border border-dashed border-border rounded-md text-[11px] text-muted-foreground grid place-items-center min-h-[48px]">
+                          свободно
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {sections.length > 0 && (
+          <DropZone small label="+ перетащите «Секция» для новой строки" />
+        )}
+      </div>
+
+      {/* Dialogs */}
+      <ItemDialog
+        open={openKind === "section"}
+        onOpenChange={(v) => !v && close()}
+        title="Секция"
+      >
+        {openKind === "section" &&
+          (() => {
+            const s = sections.find((x) => x.id === openId);
+            if (!s) return null;
+            return (
+              <>
+                <div>
+                  <Label>Название</Label>
+                  <input
+                    value={s.label}
+                    onChange={(e) =>
+                      updateSection(s.id, { label: e.target.value })
+                    }
+                    className="mt-1 w-full h-9 px-3 rounded-md bg-surface-2 border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+                <div>
+                  <Label>Описание</Label>
+                  <textarea
+                    value={s.description}
+                    onChange={(e) =>
+                      updateSection(s.id, { description: e.target.value })
+                    }
+                    rows={4}
+                    className="mt-1 w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <SelectField
+                    label="Понимание секции"
+                    value={s.understanding}
+                    options={UNDERSTANDING_LEVELS}
+                    onChange={(v) =>
+                      updateSection(s.id, {
+                        understanding: v as Section["understanding"],
+                      })
+                    }
+                  />
+                  <SelectField
+                    label="Статус"
+                    value={s.status}
+                    options={MODULE_STATES}
+                    onChange={(v) =>
+                      updateSection(s.id, { status: v as Section["status"] })
+                    }
+                    dot={stateDot(s.status)}
+                  />
+                </div>
+              </>
+            );
+          })()}
+      </ItemDialog>
 
       <ItemDialog
-        open={!!active}
-        onOpenChange={(v) => !v && setOpenId(null)}
+        open={openKind === "subform"}
+        onOpenChange={(v) => !v && close()}
+        title="Сабформа"
+      >
+        {openKind === "subform" &&
+          (() => {
+            const s = subforms.find((x) => x.id === openId);
+            if (!s) return null;
+            const attached = fields.filter((f) => f.subformId === s.id);
+            return (
+              <>
+                <div>
+                  <Label>Название</Label>
+                  <input
+                    value={s.label}
+                    onChange={(e) =>
+                      updateSubform(s.id, { label: e.target.value })
+                    }
+                    className="mt-1 w-full h-9 px-3 rounded-md bg-surface-2 border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+                <div>
+                  <Label>Описание</Label>
+                  <textarea
+                    value={s.description}
+                    onChange={(e) =>
+                      updateSubform(s.id, { description: e.target.value })
+                    }
+                    rows={4}
+                    className="mt-1 w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+                <div>
+                  <Label>Привязанные поля ({attached.length})</Label>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {attached.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        Свяжите поля через выпадающий список в карточке поля.
+                      </span>
+                    ) : (
+                      attached.map((f) => (
+                        <span
+                          key={f.id}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 border border-primary/30 text-xs"
+                        >
+                          <span
+                            className={
+                              "size-1.5 rounded-full " +
+                              checkStatusDot(f.checkStatus)
+                            }
+                          />
+                          {f.label}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+      </ItemDialog>
+
+      <ItemDialog
+        open={openKind === "field"}
+        onOpenChange={(v) => !v && close()}
         title="Поле"
       >
-        {active && (
-          <>
-            <div>
-              <Label>Лейбл</Label>
-              <input
-                value={active.label}
-                onChange={(e) => update(active.id, { label: e.target.value })}
-                className="mt-1 w-full h-9 px-3 rounded-md bg-surface-2 border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </div>
-            <div>
-              <Label>Описание</Label>
-              <textarea
-                value={active.description}
-                onChange={(e) =>
-                  update(active.id, { description: e.target.value })
-                }
-                rows={4}
-                className="mt-1 w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
-              />
-            </div>
-            <div className="grid sm:grid-cols-3 gap-3">
-              <SelectField
-                label="Секция"
-                value={
-                  sectionOptions.find((o) => o.id === (active.sectionId ?? ""))
-                    ?.label ?? "— без секции —"
-                }
-                options={sectionOptions.map((o) => o.label)}
-                onChange={(label) => {
-                  const opt = sectionOptions.find((o) => o.label === label);
-                  update(active.id, {
-                    sectionId: opt && opt.id ? opt.id : null,
-                  });
-                }}
-              />
-              <SelectField
-                label="Сабформа"
-                value={
-                  subformOptions.find((o) => o.id === (active.subformId ?? ""))
-                    ?.label ?? "— без сабформы —"
-                }
-                options={subformOptions.map((o) => o.label)}
-                onChange={(label) => {
-                  const opt = subformOptions.find((o) => o.label === label);
-                  update(active.id, {
-                    subformId: opt && opt.id ? opt.id : null,
-                  });
-                }}
-              />
-              <SelectField
-                label="Статус проверки"
-                value={active.checkStatus}
-                options={CHECK_STATUSES}
-                onChange={(v) =>
-                  update(active.id, {
-                    checkStatus: v as Field["checkStatus"],
-                    checkTime:
-                      v === "Не Проверено"
-                        ? "--"
-                        : new Date().toLocaleString(),
-                  })
-                }
-              />
-              <div>
-                <Label>Время проверки</Label>
-                <div className="mt-1 h-9 px-3 rounded-md bg-surface-2 border border-border text-sm grid items-center font-mono text-muted-foreground">
-                  {active.checkTime}
+        {openKind === "field" &&
+          (() => {
+            const f = fields.find((x) => x.id === openId);
+            if (!f) return null;
+            const subformOptions = [
+              { id: "", label: "— без сабформы —" },
+              ...subforms.map((s) => ({ id: s.id, label: s.label })),
+            ];
+            return (
+              <>
+                <div>
+                  <Label>Лейбл</Label>
+                  <input
+                    value={f.label}
+                    onChange={(e) =>
+                      updateField(f.id, { label: e.target.value })
+                    }
+                    className="mt-1 w-full h-9 px-3 rounded-md bg-surface-2 border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40"
+                  />
                 </div>
-              </div>
-            </div>
-            <ProcessChips
-              value={active.processes}
-              onChange={(processes) => update(active.id, { processes })}
-            />
-            <div className="flex justify-end pt-2 border-t border-border">
-              <button
-                onClick={() => remove(active.id)}
-                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-sm text-muted-foreground hover:text-destructive-foreground hover:bg-destructive/15 hover:border-destructive/50"
-              >
-                <Trash2 className="size-4" />
-                Удалить
-              </button>
-            </div>
-          </>
-        )}
+                <div>
+                  <Label>Описание</Label>
+                  <textarea
+                    value={f.description}
+                    onChange={(e) =>
+                      updateField(f.id, { description: e.target.value })
+                    }
+                    rows={4}
+                    className="mt-1 w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <SelectField
+                    label="Сабформа"
+                    value={
+                      subformOptions.find(
+                        (o) => o.id === (f.subformId ?? ""),
+                      )?.label ?? "— без сабформы —"
+                    }
+                    options={subformOptions.map((o) => o.label)}
+                    onChange={(label) => {
+                      const opt = subformOptions.find((o) => o.label === label);
+                      updateField(f.id, {
+                        subformId: opt && opt.id ? opt.id : null,
+                      });
+                    }}
+                  />
+                  <SelectField
+                    label="Статус проверки"
+                    value={f.checkStatus}
+                    options={CHECK_STATUSES}
+                    onChange={(v) =>
+                      updateField(f.id, {
+                        checkStatus: v as Field["checkStatus"],
+                        checkTime:
+                          v === "Не Проверено"
+                            ? "--"
+                            : new Date().toLocaleString(),
+                      })
+                    }
+                  />
+                  <div>
+                    <Label>Время проверки</Label>
+                    <div className="mt-1 h-9 px-3 rounded-md bg-surface-2 border border-border text-sm grid items-center font-mono text-muted-foreground">
+                      {f.checkTime}
+                    </div>
+                  </div>
+                </div>
+                <ProcessChips
+                  value={f.processes}
+                  onChange={(processes) => updateField(f.id, { processes })}
+                />
+              </>
+            );
+          })()}
       </ItemDialog>
     </div>
   );
 }
+
+function PaletteItem({
+  icon: Icon,
+  label,
+  hint,
+  onDragStart,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  hint: string;
+  onDragStart: (e: React.DragEvent) => void;
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      className="surface-card p-3 cursor-grab active:cursor-grabbing select-none hover:border-primary/40 transition"
+    >
+      <div className="flex items-center gap-2">
+        <Icon className="size-4 text-primary" />
+        <div className="text-sm font-medium">{label}</div>
+      </div>
+      <div className="text-[10px] text-muted-foreground mt-1">{hint}</div>
+    </div>
+  );
+}
+
+function DropZone({ label, small }: { label: string; small?: boolean }) {
+  return (
+    <div
+      className={
+        "border border-dashed border-border rounded-md text-xs text-muted-foreground grid place-items-center px-3 " +
+        (small ? "min-h-[48px]" : "min-h-[140px]")
+      }
+    >
+      {label}
+    </div>
+  );
+}
+
+function FieldChip({
+  field,
+  onOpen,
+  onRemove,
+}: {
+  field: Field;
+  onOpen: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="group relative">
+      <button
+        onClick={onOpen}
+        className="w-full text-left surface-inset px-3 py-2 hover:border-primary/40 transition rounded-md"
+      >
+        <div className="flex items-start gap-2">
+          <span
+            className={
+              "mt-1.5 size-1.5 rounded-full shrink-0 " +
+              checkStatusDot(field.checkStatus)
+            }
+            title={field.checkStatus}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium truncate">{field.label}</div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              {field.checkStatus}
+              {field.processes.length > 0
+                ? ` · ${field.processes.length} проц.`
+                : ""}
+            </div>
+          </div>
+        </div>
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        className="absolute top-1 right-1 size-6 grid place-items-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive-foreground hover:bg-destructive/20"
+        aria-label="Удалить"
+      >
+        <X className="size-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function SubformChip({
+  subform,
+  count,
+  onOpen,
+  onRemove,
+}: {
+  subform: Subform;
+  count: number;
+  onOpen: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="group relative">
+      <button
+        onClick={onOpen}
+        className="w-full text-left surface-inset px-3 py-2 hover:border-primary/40 transition rounded-md"
+      >
+        <div className="flex items-start gap-2">
+          <FileText className="size-3.5 text-primary mt-0.5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium truncate">{subform.label}</div>
+            <div className="text-[11px] text-muted-foreground truncate">
+              сабформа · {count} полей
+            </div>
+          </div>
+        </div>
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        className="absolute top-1 right-1 size-6 grid place-items-center rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive-foreground hover:bg-destructive/20"
+        aria-label="Удалить"
+      >
+        <X className="size-3.5" />
+      </button>
+    </div>
+  );
+}
+
 
 function ProcessChips({
   value,
@@ -1414,14 +1614,3 @@ function SelectField({
   );
 }
 
-function RemoveBtn({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="size-8 grid place-items-center rounded-md text-muted-foreground hover:text-destructive-foreground hover:bg-destructive/15"
-      aria-label="Удалить"
-    >
-      <Trash2 className="size-4" />
-    </button>
-  );
-}
