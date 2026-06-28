@@ -25,6 +25,7 @@ import {
   UNDERSTANDING_LEVELS,
   type DeepCheckModule,
   type Field,
+  type ModelOrderItem,
   type Process,
   type Question,
   type Section,
@@ -507,18 +508,13 @@ function ModuleEditor({
             sections={m.sections}
             subforms={m.subforms}
             fields={m.fields}
+            modelOrder={m.modelOrder}
             onSectionsChange={(sections) => onChange({ sections })}
             onSubformsChange={(subforms) => onChange({ subforms })}
             onFieldsChange={(fields) => onChange({ fields })}
+            onModelOrderChange={(modelOrder) => onChange({ modelOrder })}
           />
         )}
-        {section === "processes" && (
-          <ProcessesPane
-            items={m.processes}
-            onChange={(processes) => onChange({ processes })}
-          />
-        )}
-
         {section === "processes" && (
           <ProcessesPane
             items={m.processes}
@@ -727,22 +723,26 @@ function ModelPane({
   sections,
   subforms,
   fields,
+  modelOrder,
   onSectionsChange,
   onSubformsChange,
   onFieldsChange,
+  onModelOrderChange,
 }: {
   sections: Section[];
   subforms: Subform[];
   fields: Field[];
+  modelOrder: ModelOrderItem[];
   onSectionsChange: (n: Section[]) => void;
   onSubformsChange: (n: Subform[]) => void;
   onFieldsChange: (n: Field[]) => void;
+  onModelOrderChange: (n: ModelOrderItem[]) => void;
 }) {
   const [openKind, setOpenKind] = useState<
     null | "section" | "subform" | "field"
   >(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [dragOverSectionId, setDragOverSectionId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [canvasHover, setCanvasHover] = useState(false);
 
   const DRAG_MIME = "application/x-deepcheck";
@@ -765,8 +765,19 @@ function ModelPane({
       layout: [],
     };
     onSectionsChange([...sections, s]);
+    onModelOrderChange([...modelOrder, { kind: "section", id: s.id }]);
   };
-  const addFieldTo = (sectionId: string) => {
+  const addSubform = () => {
+    const sf: Subform = {
+      id: uid(),
+      label: "Новая сабформа",
+      description: "",
+      layout: [],
+    };
+    onSubformsChange([...subforms, sf]);
+    onModelOrderChange([...modelOrder, { kind: "subform", id: sf.id }]);
+  };
+  const addFieldToSection = (sectionId: string) => {
     const f: Field = {
       id: uid(),
       label: "Новое поле",
@@ -786,17 +797,22 @@ function ModelPane({
       ),
     );
   };
-  const addSubformTo = (sectionId: string) => {
-    const sf: Subform = {
+  const addFieldToSubform = (subformId: string) => {
+    const f: Field = {
       id: uid(),
-      label: "Новая сабформа",
+      label: "Новое поле",
       description: "",
+      sectionId: null,
+      subformId,
+      processes: [],
+      checkStatus: "Не Проверено",
+      checkTime: "--",
     };
-    onSubformsChange([...subforms, sf]);
-    onSectionsChange(
-      sections.map((s) =>
-        s.id === sectionId
-          ? { ...s, layout: [...s.layout, { kind: "subform", id: sf.id }] }
+    onFieldsChange([...fields, f]);
+    onSubformsChange(
+      subforms.map((s) =>
+        s.id === subformId
+          ? { ...s, layout: [...s.layout, { kind: "field", id: f.id }] }
           : s,
       ),
     );
@@ -816,52 +832,49 @@ function ModelPane({
   const removeSection = (id: string) => {
     const sec = sections.find((s) => s.id === id);
     if (!sec) return;
-    const fieldIds = sec.layout.filter((i) => i.kind === "field").map((i) => i.id);
-    const subformIds = sec.layout
-      .filter((i) => i.kind === "subform")
-      .map((i) => i.id);
+    const fieldIds = sec.layout.map((i) => i.id);
     onFieldsChange(fields.filter((f) => !fieldIds.includes(f.id)));
-    onSubformsChange(subforms.filter((s) => !subformIds.includes(s.id)));
     onSectionsChange(sections.filter((s) => s.id !== id));
-  };
-  const removeField = (id: string) => {
-    onFieldsChange(fields.filter((f) => f.id !== id));
-    onSectionsChange(
-      sections.map((s) => ({
-        ...s,
-        layout: s.layout.filter((i) => !(i.kind === "field" && i.id === id)),
-      })),
+    onModelOrderChange(
+      modelOrder.filter((o) => !(o.kind === "section" && o.id === id)),
     );
   };
   const removeSubform = (id: string) => {
+    const sf = subforms.find((s) => s.id === id);
+    if (!sf) return;
+    const fieldIds = sf.layout.map((i) => i.id);
+    onFieldsChange(fields.filter((f) => !fieldIds.includes(f.id)));
     onSubformsChange(subforms.filter((s) => s.id !== id));
+    onModelOrderChange(
+      modelOrder.filter((o) => !(o.kind === "subform" && o.id === id)),
+    );
+  };
+  const removeFieldFromSection = (sectionId: string, fieldId: string) => {
+    onFieldsChange(fields.filter((f) => f.id !== fieldId));
     onSectionsChange(
-      sections.map((s) => ({
-        ...s,
-        layout: s.layout.filter((i) => !(i.kind === "subform" && i.id === id)),
-      })),
+      sections.map((s) =>
+        s.id === sectionId
+          ? { ...s, layout: s.layout.filter((i) => i.id !== fieldId) }
+          : s,
+      ),
+    );
+  };
+  const removeFieldFromSubform = (subformId: string, fieldId: string) => {
+    onFieldsChange(fields.filter((f) => f.id !== fieldId));
+    onSubformsChange(
+      subforms.map((s) =>
+        s.id === subformId
+          ? { ...s, layout: s.layout.filter((i) => i.id !== fieldId) }
+          : s,
+      ),
     );
   };
 
-  const toRows = (layout: Section["layout"]) => {
-    const rows: Section["layout"][] = [];
-    let buf: Section["layout"] = [];
-    for (const item of layout) {
-      if (item.kind === "subform") {
-        if (buf.length) {
-          rows.push(buf);
-          buf = [];
-        }
-        rows.push([item]);
-      } else {
-        buf.push(item);
-        if (buf.length === 2) {
-          rows.push(buf);
-          buf = [];
-        }
-      }
+  const toFieldRows = <T extends { id: string }>(items: T[]) => {
+    const rows: T[][] = [];
+    for (let i = 0; i < items.length; i += 2) {
+      rows.push(items.slice(i, i + 2));
     }
-    if (buf.length) rows.push(buf);
     return rows;
   };
 
@@ -877,6 +890,38 @@ function ModelPane({
       return e.dataTransfer.getData(DRAG_MIME) || null;
     }
     return null;
+  };
+
+  const renderFieldRows = (
+    layout: { kind: "field"; id: string }[],
+    onRemoveField: (fieldId: string) => void,
+  ) => {
+    const rows = toFieldRows(layout);
+    return (
+      <div className="space-y-2">
+        {rows.map((row, ri) => (
+          <div key={ri} className="grid gap-2 grid-cols-2">
+            {row.map((item) => {
+              const f = fields.find((x) => x.id === item.id);
+              if (!f) return null;
+              return (
+                <FieldChip
+                  key={item.id}
+                  field={f}
+                  onOpen={() => openItem("field", item.id)}
+                  onRemove={() => onRemoveField(item.id)}
+                />
+              );
+            })}
+            {row.length === 1 && (
+              <div className="border border-dashed border-border rounded-md text-[11px] text-muted-foreground grid place-items-center min-h-[48px]">
+                свободно
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -895,13 +940,13 @@ function ModelPane({
         <PaletteItem
           icon={FileText}
           label="Сабформа"
-          hint="перетащите в секцию"
+          hint="перетащите на канвас"
           onDragStart={dragStart("subform")}
         />
         <PaletteItem
           icon={Layers}
           label="Поле"
-          hint="перетащите в секцию"
+          hint="перетащите в секцию или сабформу"
           onDragStart={dragStart("field")}
         />
       </aside>
@@ -913,7 +958,8 @@ function ModelPane({
           (canvasHover ? "bg-primary/5 ring-1 ring-primary/30" : "")
         }
         onDragOver={(e) => {
-          if (e.dataTransfer.types.includes(DRAG_MIME)) {
+          const k = dragKind(e);
+          if (k === "section" || k === "subform") {
             e.preventDefault();
             setCanvasHover(true);
           }
@@ -921,137 +967,153 @@ function ModelPane({
         onDragLeave={() => setCanvasHover(false)}
         onDrop={(e) => {
           setCanvasHover(false);
-          if (e.dataTransfer.getData(DRAG_MIME) === "section") {
+          const k = e.dataTransfer.getData(DRAG_MIME);
+          if (k === "section") {
             e.preventDefault();
             addSection();
+          } else if (k === "subform") {
+            e.preventDefault();
+            addSubform();
           }
         }}
       >
-        {sections.length === 0 && (
-          <DropZone label="Перетащите «Секция» сюда, чтобы начать модель" />
+        {modelOrder.length === 0 && (
+          <DropZone label="Перетащите «Секция» или «Сабформа» сюда, чтобы начать модель" />
         )}
 
-        {sections.map((sec) => {
-          const rows = toRows(sec.layout);
-          const isOver = dragOverSectionId === sec.id;
+        {modelOrder.map((entry) => {
+          const dragKey = `${entry.kind}:${entry.id}`;
+          const isOver = dragOverId === dragKey;
+          const acceptField = (e: React.DragEvent) => {
+            const k = dragKind(e);
+            if (k === "field") {
+              e.preventDefault();
+              e.stopPropagation();
+              setDragOverId(dragKey);
+            }
+          };
+          const leaveField = () =>
+            setDragOverId((cur) => (cur === dragKey ? null : cur));
+
+          if (entry.kind === "section") {
+            const sec = sections.find((s) => s.id === entry.id);
+            if (!sec) return null;
+            return (
+              <div
+                key={dragKey}
+                className={
+                  "surface-card p-4 transition " +
+                  (isOver ? "ring-2 ring-primary/50" : "")
+                }
+                onDragOver={acceptField}
+                onDragLeave={leaveField}
+                onDrop={(e) => {
+                  if (e.dataTransfer.getData(DRAG_MIME) === "field") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    addFieldToSection(sec.id);
+                  }
+                  setDragOverId(null);
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <ListTree className="size-3.5 text-primary" />
+                  <span
+                    className={
+                      "size-1.5 rounded-full " + stateDot(sec.status)
+                    }
+                  />
+                  <button
+                    onClick={() => openItem("section", sec.id)}
+                    className="font-medium text-sm hover:text-primary"
+                  >
+                    {sec.label}
+                  </button>
+                  <span className="text-[11px] text-muted-foreground">
+                    секция · {sec.status}
+                  </span>
+                  <div className="ml-auto" />
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`Удалить секцию «${sec.label}»?`))
+                        removeSection(sec.id);
+                    }}
+                    className="size-7 grid place-items-center rounded text-muted-foreground hover:text-destructive-foreground hover:bg-destructive/20"
+                    aria-label="Удалить секцию"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+                {sec.layout.length === 0 ? (
+                  <DropZone small label="Перетащите сюда «Поле»" />
+                ) : (
+                  renderFieldRows(sec.layout, (fid) =>
+                    removeFieldFromSection(sec.id, fid),
+                  )
+                )}
+              </div>
+            );
+          }
+
+          const sf = subforms.find((s) => s.id === entry.id);
+          if (!sf) return null;
           return (
             <div
-              key={sec.id}
+              key={dragKey}
               className={
-                "surface-card p-4 transition " +
+                "surface-card p-4 transition border-primary/20 " +
                 (isOver ? "ring-2 ring-primary/50" : "")
               }
-              onDragOver={(e) => {
-                const k = dragKind(e);
-                if (k === "field" || k === "subform") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setDragOverSectionId(sec.id);
-                }
-              }}
-              onDragLeave={() =>
-                setDragOverSectionId((cur) => (cur === sec.id ? null : cur))
-              }
+              onDragOver={acceptField}
+              onDragLeave={leaveField}
               onDrop={(e) => {
-                const k = e.dataTransfer.getData(DRAG_MIME);
-                if (k === "field") {
+                if (e.dataTransfer.getData(DRAG_MIME) === "field") {
                   e.preventDefault();
                   e.stopPropagation();
-                  addFieldTo(sec.id);
-                } else if (k === "subform") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  addSubformTo(sec.id);
+                  addFieldToSubform(sf.id);
                 }
-                setDragOverSectionId(null);
+                setDragOverId(null);
               }}
             >
               <div className="flex items-center gap-2 mb-3">
-                <span
-                  className={"size-1.5 rounded-full " + stateDot(sec.status)}
-                />
+                <FileText className="size-3.5 text-primary" />
                 <button
-                  onClick={() => openItem("section", sec.id)}
+                  onClick={() => openItem("subform", sf.id)}
                   className="font-medium text-sm hover:text-primary"
                 >
-                  {sec.label}
+                  {sf.label}
                 </button>
                 <span className="text-[11px] text-muted-foreground">
-                  {sec.status}
+                  сабформа · {sf.layout.length} полей
                 </span>
                 <div className="ml-auto" />
                 <button
                   onClick={() => {
-                    if (window.confirm(`Удалить секцию «${sec.label}»?`))
-                      removeSection(sec.id);
+                    if (window.confirm(`Удалить сабформу «${sf.label}»?`))
+                      removeSubform(sf.id);
                   }}
                   className="size-7 grid place-items-center rounded text-muted-foreground hover:text-destructive-foreground hover:bg-destructive/20"
-                  aria-label="Удалить секцию"
+                  aria-label="Удалить сабформу"
                 >
                   <X className="size-3.5" />
                 </button>
               </div>
-
-              {rows.length === 0 ? (
-                <DropZone
-                  small
-                  label="Перетащите сюда «Поле» или «Сабформа»"
-                />
+              {sf.layout.length === 0 ? (
+                <DropZone small label="Перетащите сюда «Поле»" />
               ) : (
-                <div className="space-y-2">
-                  {rows.map((row, ri) => (
-                    <div
-                      key={ri}
-                      className={
-                        "grid gap-2 " +
-                        (row[0].kind === "subform"
-                          ? "grid-cols-1"
-                          : "grid-cols-2")
-                      }
-                    >
-                      {row.map((item) => {
-                        if (item.kind === "field") {
-                          const f = fields.find((x) => x.id === item.id);
-                          if (!f) return null;
-                          return (
-                            <FieldChip
-                              key={item.id}
-                              field={f}
-                              onOpen={() => openItem("field", item.id)}
-                              onRemove={() => removeField(item.id)}
-                            />
-                          );
-                        }
-                        const sf = subforms.find((x) => x.id === item.id);
-                        if (!sf) return null;
-                        return (
-                          <SubformChip
-                            key={item.id}
-                            subform={sf}
-                            count={
-                              fields.filter((f) => f.subformId === item.id)
-                                .length
-                            }
-                            onOpen={() => openItem("subform", item.id)}
-                            onRemove={() => removeSubform(item.id)}
-                          />
-                        );
-                      })}
-                      {row.length === 1 && row[0].kind === "field" && (
-                        <div className="border border-dashed border-border rounded-md text-[11px] text-muted-foreground grid place-items-center min-h-[48px]">
-                          свободно
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                renderFieldRows(sf.layout, (fid) =>
+                  removeFieldFromSubform(sf.id, fid),
+                )
               )}
             </div>
           );
         })}
 
-        {sections.length > 0 && (
-          <DropZone small label="+ перетащите «Секция» для новой строки" />
+        {modelOrder.length > 0 && (
+          <DropZone
+            small
+            label="+ перетащите «Секция» или «Сабформа» для новой строки"
+          />
         )}
       </div>
 
@@ -1123,7 +1185,6 @@ function ModelPane({
           (() => {
             const s = subforms.find((x) => x.id === openId);
             if (!s) return null;
-            const attached = fields.filter((f) => f.subformId === s.id);
             return (
               <>
                 <div>
@@ -1147,31 +1208,6 @@ function ModelPane({
                     className="mt-1 w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
                   />
                 </div>
-                <div>
-                  <Label>Привязанные поля ({attached.length})</Label>
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {attached.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">
-                        Свяжите поля через выпадающий список в карточке поля.
-                      </span>
-                    ) : (
-                      attached.map((f) => (
-                        <span
-                          key={f.id}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 border border-primary/30 text-xs"
-                        >
-                          <span
-                            className={
-                              "size-1.5 rounded-full " +
-                              checkStatusDot(f.checkStatus)
-                            }
-                          />
-                          {f.label}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                </div>
               </>
             );
           })()}
@@ -1186,10 +1222,6 @@ function ModelPane({
           (() => {
             const f = fields.find((x) => x.id === openId);
             if (!f) return null;
-            const subformOptions = [
-              { id: "", label: "— без сабформы —" },
-              ...subforms.map((s) => ({ id: s.id, label: s.label })),
-            ];
             return (
               <>
                 <div>
@@ -1213,22 +1245,7 @@ function ModelPane({
                     className="mt-1 w-full resize-y rounded-md bg-surface-2 border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
                   />
                 </div>
-                <div className="grid sm:grid-cols-3 gap-3">
-                  <SelectField
-                    label="Сабформа"
-                    value={
-                      subformOptions.find(
-                        (o) => o.id === (f.subformId ?? ""),
-                      )?.label ?? "— без сабформы —"
-                    }
-                    options={subformOptions.map((o) => o.label)}
-                    onChange={(label) => {
-                      const opt = subformOptions.find((o) => o.label === label);
-                      updateField(f.id, {
-                        subformId: opt && opt.id ? opt.id : null,
-                      });
-                    }}
-                  />
+                <div className="grid sm:grid-cols-2 gap-3">
                   <SelectField
                     label="Статус проверки"
                     value={f.checkStatus}
@@ -1261,6 +1278,7 @@ function ModelPane({
     </div>
   );
 }
+
 
 function PaletteItem({
   icon: Icon,

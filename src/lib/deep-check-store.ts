@@ -39,12 +39,41 @@ export function useDeepCheckStore() {
   useEffect(() => {
     const raw = readJSON<DeepCheckModule[]>(STORAGE_KEY, []);
     setModules(
-      raw.map((m) => ({
-        ...m,
-        subforms: m.subforms ?? [],
-        sections: (m.sections ?? []).map((s) => ({ ...s, layout: s.layout ?? [] })),
-        fields: (m.fields ?? []).map((f) => ({ ...f, subformId: f.subformId ?? null })),
-      })),
+      raw.map((m) => {
+        const sections = (m.sections ?? []).map((s) => ({
+          ...s,
+          layout: (s.layout ?? []).filter((i) => i.kind === "field"),
+        }));
+        const subforms = (m.subforms ?? []).map((s) => ({
+          ...s,
+          layout: s.layout ?? [],
+        }));
+        const existingOrder = (m.modelOrder ?? []).filter((o) =>
+          o.kind === "section"
+            ? sections.some((s) => s.id === o.id)
+            : subforms.some((s) => s.id === o.id),
+        );
+        const seen = new Set(existingOrder.map((o) => `${o.kind}:${o.id}`));
+        const modelOrder = [
+          ...existingOrder,
+          ...sections
+            .filter((s) => !seen.has(`section:${s.id}`))
+            .map((s) => ({ kind: "section" as const, id: s.id })),
+          ...subforms
+            .filter((s) => !seen.has(`subform:${s.id}`))
+            .map((s) => ({ kind: "subform" as const, id: s.id })),
+        ];
+        return {
+          ...m,
+          sections,
+          subforms,
+          modelOrder,
+          fields: (m.fields ?? []).map((f) => ({
+            ...f,
+            subformId: f.subformId ?? null,
+          })),
+        };
+      }),
     );
 
     setOpenTabs(readJSON<string[]>(OPEN_TABS_KEY, []));
@@ -72,6 +101,7 @@ export function useDeepCheckStore() {
       questions: [],
       sections: [],
       subforms: [],
+      modelOrder: [],
       fields: [],
       processes: [],
       createdAt: Date.now(),
